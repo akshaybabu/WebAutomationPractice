@@ -1,0 +1,6 @@
+{
+  "name": "Automation Practice Arena",
+  "description": "An interactive, high-fidelity playground for web automation and QA testing, featuring dynamic elements, shadow DOM, iframes, file uploads, drag-and-drop, data grids, modal dialogues, secure forms, and a complete simulated banking portal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
