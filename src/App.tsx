@@ -8,7 +8,8 @@ import { LogEntry } from './types';
 import IdentityPortal from './components/IdentityPortal';
 import ApexBank from './components/ApexBank';
 import AutomationSandbox from './components/AutomationSandbox';
-import EventConsole from './components/EventConsole';
+import ApiLab from './components/ApiLab';
+import EcommerceLab from './components/EcommerceLab';
 import { 
   Sliders, 
   Lock, 
@@ -19,11 +20,13 @@ import {
   PlayCircle,
   CheckCircle2,
   Calendar,
-  Cpu
+  Cpu,
+  Globe,
+  ShoppingBag
 } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'sandbox' | 'identity' | 'bank'>('sandbox');
+  const [activeTab, setActiveTab] = useState<'sandbox' | 'identity' | 'bank' | 'api' | 'ecommerce'>('sandbox');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [istTime, setIstTime] = useState('');
 
@@ -84,7 +87,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col pb-[300px]">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* Top Professional Header Navigation */}
       <header id="app-header" className="bg-white border-b border-slate-200 sticky top-0 z-40 custom-shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -138,7 +141,7 @@ export default function App() {
       {/* Lab Nav Tabs */}
       <nav id="module-tabs" className="bg-white border-b border-slate-200 py-3 sticky top-[65px] z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex overflow-x-auto gap-2 p-1 bg-slate-100 rounded-xl max-w-xl border border-slate-200">
+          <div className="flex overflow-x-auto gap-2 p-1 bg-slate-100 rounded-xl max-w-3xl border border-slate-200">
             
             {/* Sandbox Elements Tab */}
             <button
@@ -191,6 +194,40 @@ export default function App() {
               <span>3. Banking Portal</span>
             </button>
 
+            {/* API Lab Tab */}
+            <button
+              id="tab-api-lab"
+              onClick={() => {
+                setActiveTab('api');
+                addLog('TAB_SWITCH', 'tab-api-lab', 'Navigated to Live REST API Swagger & Postman Practice Arena');
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === 'api'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>4. API Lab</span>
+            </button>
+
+            {/* E-commerce Portal Tab */}
+            <button
+              id="tab-ecommerce-lab"
+              onClick={() => {
+                setActiveTab('ecommerce');
+                addLog('TAB_SWITCH', 'tab-ecommerce-lab', 'Navigated to Live E-commerce End-to-End Practice Arena');
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
+                activeTab === 'ecommerce'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>5. E-commerce Flow</span>
+            </button>
+
           </div>
         </div>
       </nav>
@@ -211,12 +248,17 @@ export default function App() {
           {activeTab === 'bank' && (
             <ApexBank onAddLog={addLog} />
           )}
+
+          {activeTab === 'api' && (
+            <ApiLab onAddLog={addLog} />
+          )}
+
+          {activeTab === 'ecommerce' && (
+            <EcommerceLab onAddLog={addLog} />
+          )}
         </div>
 
       </main>
-
-      {/* Floating live console dashboard footer */}
-      <EventConsole logs={logs} onClearLogs={handleClearLogs} />
     </div>
   );
 }

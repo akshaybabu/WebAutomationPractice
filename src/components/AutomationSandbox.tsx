@@ -25,7 +25,11 @@ import {
   Lock,
   Unlock,
   ShieldAlert,
-  RefreshCw
+  RefreshCw,
+  Terminal,
+  Check,
+  Globe,
+  BookOpen
 } from 'lucide-react';
 
 interface AutomationSandboxProps {
@@ -113,6 +117,79 @@ export default function AutomationSandbox({ onAddLog }: AutomationSandboxProps) 
     totalElements: number;
     errors: string[];
   } | null>(null);
+
+  // --- Senior QA Training States ---
+  // 1. Dynamic Loading Spinner
+  const [qaFetchState, setQaFetchState] = useState<'idle' | 'loading' | 'success'>('idle');
+  const [qaFetchData, setQaFetchData] = useState<string[]>([]);
+  
+  // 2. Simulated HTTP Response Status Codes
+  const [apiResponseCode, setApiResponseCode] = useState<string>('200');
+  const [apiResponseResult, setApiResponseResult] = useState<{ status: number; message: string; data?: any } | null>(null);
+  const [apiResponseLoading, setApiResponseLoading] = useState<boolean>(false);
+  
+  // 3. Multi-Select Tag Builder
+  const [qaSelectedTools, setQaSelectedTools] = useState<string[]>(['Playwright']);
+  
+  // 4. Dynamic Hover Reveal hotspot
+  const [isQaHovered, setIsQaHovered] = useState<boolean>(false);
+
+  // --- Swagger Petstore Mock API Database & UI States ---
+  const [swaggerPets, setSwaggerPets] = useState<any[]>([
+    { id: 101, name: 'Buster', category: 'Canine', status: 'available' },
+    { id: 102, name: 'Mittens', category: 'Feline', status: 'pending' },
+    { id: 103, name: 'Bubbles', category: 'Fish', status: 'available' },
+    { id: 104, name: 'Pip', category: 'Rodent', status: 'sold' }
+  ]);
+  const [swaggerExpanded, setSwaggerExpanded] = useState<Record<string, boolean>>({
+    getPets: false,
+    getPetById: false,
+    addPet: false,
+    updatePet: false,
+    deletePet: false
+  });
+  
+  // Route parameter inputs
+  const [swagPetIdGet, setSwagPetIdGet] = useState<string>('101');
+  const [swagPetIdDelete, setSwagPetIdDelete] = useState<string>('104');
+  
+  const [swagAddPetBody, setSwagAddPetBody] = useState<string>(
+    JSON.stringify({ name: 'Rocky', category: 'Canine', status: 'available' }, null, 2)
+  );
+  const [swagUpdatePetBody, setSwagUpdatePetBody] = useState<string>(
+    JSON.stringify({ id: 101, name: 'Buster Max', category: 'Canine', status: 'pending' }, null, 2)
+  );
+
+  // Active executing route responses
+  const [swagResponse, setSwagResponse] = useState<Record<string, {
+    status: number;
+    statusText: string;
+    headers: Record<string, string>;
+    body: any;
+    durationMs: number;
+  } | null>>({
+    getPets: null,
+    getPetById: null,
+    addPet: null,
+    updatePet: null,
+    deletePet: null
+  });
+
+  const [swagActiveResponseTab, setSwagActiveResponseTab] = useState<Record<string, 'response' | 'code'>>({
+    getPets: 'response',
+    getPetById: 'response',
+    addPet: 'response',
+    updatePet: 'response',
+    deletePet: 'response'
+  });
+
+  const [swagCodeLang, setSwagCodeLang] = useState<Record<string, 'playwright' | 'cypress' | 'fetch'>>({
+    getPets: 'playwright',
+    getPetById: 'playwright',
+    addPet: 'playwright',
+    updatePet: 'playwright',
+    deletePet: 'playwright'
+  });
 
   // --- Setup Shadow DOM ---
   useEffect(() => {
@@ -409,7 +486,431 @@ export default function AutomationSandbox({ onAddLog }: AutomationSandboxProps) 
     setAuditRunning(false);
     setAuditResults(null);
     
+    // Reset Senior QA Training states
+    setQaFetchState('idle');
+    setQaFetchData([]);
+    setApiResponseCode('200');
+    setApiResponseResult(null);
+    setApiResponseLoading(false);
+    setQaSelectedTools(['Playwright']);
+    setIsQaHovered(false);
+
+    // Reset Swagger mock petstore states
+    setSwaggerPets([
+      { id: 101, name: 'Buster', category: 'Canine', status: 'available' },
+      { id: 102, name: 'Mittens', category: 'Feline', status: 'pending' },
+      { id: 103, name: 'Bubbles', category: 'Fish', status: 'available' },
+      { id: 104, name: 'Pip', category: 'Rodent', status: 'sold' }
+    ]);
+    setSwaggerExpanded({
+      getPets: false,
+      getPetById: false,
+      addPet: false,
+      updatePet: false,
+      deletePet: false
+    });
+    setSwagPetIdGet('101');
+    setSwagPetIdDelete('104');
+    setSwagAddPetBody(JSON.stringify({ name: 'Rocky', category: 'Canine', status: 'available' }, null, 2));
+    setSwagUpdatePetBody(JSON.stringify({ id: 101, name: 'Buster Max', category: 'Canine', status: 'pending' }, null, 2));
+    setSwagResponse({
+      getPets: null,
+      getPetById: null,
+      addPet: null,
+      updatePet: null,
+      deletePet: null
+    });
+    setSwagActiveResponseTab({
+      getPets: 'response',
+      getPetById: 'response',
+      addPet: 'response',
+      updatePet: 'response',
+      deletePet: 'response'
+    });
+    setSwagCodeLang({
+      getPets: 'playwright',
+      getPetById: 'playwright',
+      addPet: 'playwright',
+      updatePet: 'playwright',
+      deletePet: 'playwright'
+    });
+    
     onAddLog('SANDBOX_RESET', 'btn-reset-entire-sandbox', 'Restored all sandbox variables to baseline configuration');
+  };
+
+  // --- Simulated Swagger Endpoint Request Executors ---
+  const [copiedRoute, setCopiedRoute] = useState<string | null>(null);
+  const handleCopyCode = (route: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedRoute(route);
+    onAddLog('API_CODE_COPY', `btn-copy-${route}`, `Copied automation test code snippet to clipboard for route: ${route}`);
+    setTimeout(() => setCopiedRoute(null), 1800);
+  };
+
+  const executeSwagRoute = (
+    route: 'getPets' | 'getPetById' | 'addPet' | 'updatePet' | 'deletePet',
+    action: () => { status: number; statusText: string; body: any }
+  ) => {
+    onAddLog('API_SWAGGER_TRY', `btn-try-${route}`, `Triggered try-it-out simulation for swagger endpoint: ${route}`);
+    const start = performance.now();
+    setTimeout(() => {
+      try {
+        const result = action();
+        const end = performance.now();
+        const duration = Math.round(end - start) + 12; // Add minor offset for realistic network jitter
+        setSwagResponse(prev => ({
+          ...prev,
+          [route]: {
+            status: result.status,
+            statusText: result.statusText,
+            headers: {
+              'content-type': 'application/json',
+              'server': 'Kestrel/Mock-Petstore-v1',
+              'date': new Date().toUTCString(),
+              'cache-control': 'no-store, no-cache',
+              'access-control-allow-origin': '*'
+            },
+            body: result.body,
+            durationMs: duration
+          }
+        }));
+        onAddLog('API_SWAGGER_RESPONSE', `btn-try-${route}`, `Swagger route ${route} returned status ${result.status} ${result.statusText} in ${duration}ms`);
+      } catch (err: any) {
+        setSwagResponse(prev => ({
+          ...prev,
+          [route]: {
+            status: 500,
+            statusText: 'Internal Error',
+            headers: { 'content-type': 'application/json' },
+            body: { error: 'Simulation failure', details: err.message },
+            durationMs: 5
+          }
+        }));
+      }
+    }, 400);
+  };
+
+  const handleExecuteGetPets = () => {
+    executeSwagRoute('getPets', () => {
+      return {
+        status: 200,
+        statusText: 'OK',
+        body: swaggerPets
+      };
+    });
+  };
+
+  const handleExecuteGetPetById = () => {
+    executeSwagRoute('getPetById', () => {
+      const id = parseInt(swagPetIdGet, 10);
+      if (isNaN(id)) {
+        return {
+          status: 400,
+          statusText: 'Bad Request',
+          body: { error: 'Invalid ID format supplied. Expected number.' }
+        };
+      }
+      const pet = swaggerPets.find(p => p.id === id);
+      if (!pet) {
+        return {
+          status: 404,
+          statusText: 'Not Found',
+          body: { error: 'Pet not found', requestedId: id }
+        };
+      }
+      return {
+        status: 200,
+        statusText: 'OK',
+        body: pet
+      };
+    });
+  };
+
+  const handleExecuteAddPet = () => {
+    executeSwagRoute('addPet', () => {
+      let parsed: any;
+      try {
+        parsed = JSON.parse(swagAddPetBody);
+      } catch (e) {
+        return {
+          status: 400,
+          statusText: 'Bad Request',
+          body: { error: 'Malformed JSON payload. Verification failed.' }
+        };
+      }
+      if (!parsed.name) {
+        return {
+          status: 422,
+          statusText: 'Unprocessable Entity',
+          body: { error: 'Required validation property "name" is missing in post payload.' }
+        };
+      }
+      const newId = swaggerPets.length > 0 ? Math.max(...swaggerPets.map(p => p.id)) + 1 : 101;
+      const newPet = {
+        id: newId,
+        name: parsed.name,
+        category: parsed.category || 'General',
+        status: parsed.status || 'available'
+      };
+      setSwaggerPets(prev => [...prev, newPet]);
+      return {
+        status: 201,
+        statusText: 'Created',
+        body: newPet
+      };
+    });
+  };
+
+  const handleExecuteUpdatePet = () => {
+    executeSwagRoute('updatePet', () => {
+      let parsed: any;
+      try {
+        parsed = JSON.parse(swagUpdatePetBody);
+      } catch (e) {
+        return {
+          status: 400,
+          statusText: 'Bad Request',
+          body: { error: 'Malformed JSON payload. Verification failed.' }
+        };
+      }
+      const targetId = parseInt(parsed.id, 10);
+      if (isNaN(targetId)) {
+        return {
+          status: 400,
+          statusText: 'Bad Request',
+          body: { error: 'Missing or invalid "id" parameter inside payload body.' }
+        };
+      }
+      const exists = swaggerPets.some(p => p.id === targetId);
+      if (!exists) {
+        return {
+          status: 404,
+          statusText: 'Not Found',
+          body: { error: 'Pet update rejected. ID not found in database.', targetId }
+        };
+      }
+      const updatedPet = {
+        id: targetId,
+        name: parsed.name || 'Unnamed',
+        category: parsed.category || 'General',
+        status: parsed.status || 'available'
+      };
+      setSwaggerPets(prev => prev.map(p => p.id === targetId ? updatedPet : p));
+      return {
+        status: 200,
+        statusText: 'OK',
+        body: updatedPet
+      };
+    });
+  };
+
+  const handleExecuteDeletePet = () => {
+    executeSwagRoute('deletePet', () => {
+      const id = parseInt(swagPetIdDelete, 10);
+      if (isNaN(id)) {
+        return {
+          status: 400,
+          statusText: 'Bad Request',
+          body: { error: 'Invalid ID format supplied.' }
+        };
+      }
+      const exists = swaggerPets.some(p => p.id === id);
+      if (!exists) {
+        return {
+          status: 404,
+          statusText: 'Not Found',
+          body: { error: 'Target pet not found. Deletion ignored.', targetId: id }
+        };
+      }
+      setSwaggerPets(prev => prev.filter(p => p.id !== id));
+      return {
+        status: 200,
+        statusText: 'OK',
+        body: { message: 'Pet successfully deleted from the store database.', id }
+      };
+    });
+  };
+
+  const getSafePetName = (jsonStr: string, defaultName: string) => {
+    try {
+      const obj = JSON.parse(jsonStr);
+      return obj.name || defaultName;
+    } catch {
+      return defaultName;
+    }
+  };
+
+  const getSafePetId = (jsonStr: string, defaultId: number) => {
+    try {
+      const obj = JSON.parse(jsonStr);
+      return obj.id || defaultId;
+    } catch {
+      return defaultId;
+    }
+  };
+
+  const renderSwaggerResponse = (
+    route: 'getPets' | 'getPetById' | 'addPet' | 'updatePet' | 'deletePet',
+    pwCode: string,
+    cyCode: string,
+    fetchCode: string
+  ) => {
+    const resp = swagResponse[route];
+    const activeTab = swagActiveResponseTab[route];
+    const activeLang = swagCodeLang[route];
+
+    const currentCode = activeLang === 'playwright' ? pwCode : activeLang === 'cypress' ? cyCode : fetchCode;
+
+    return (
+      <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden shadow-inner bg-slate-50/50" id={`swagger-response-panel-${route}`}>
+        {/* Header with main toggle tabs */}
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-100 px-4 py-1.5">
+          <div className="flex gap-2">
+            <button
+              id={`tab-btn-response-${route}`}
+              onClick={() => setSwagActiveResponseTab(prev => ({ ...prev, [route]: 'response' }))}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                activeTab === 'response'
+                  ? 'bg-white text-indigo-700 shadow-sm border border-slate-200'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Response Console
+            </button>
+            <button
+              id={`tab-btn-code-${route}`}
+              onClick={() => setSwagActiveResponseTab(prev => ({ ...prev, [route]: 'code' }))}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                activeTab === 'code'
+                  ? 'bg-white text-indigo-700 shadow-sm border border-slate-200'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Automation Test Code 🎓
+            </button>
+          </div>
+          
+          <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wide">
+            {activeTab === 'response' ? 'SIMULATED NETWORK INTERCEPT' : 'SDET LEARNING TEMPLATE'}
+          </span>
+        </div>
+
+        {/* Tab 1: Response Console */}
+        {activeTab === 'response' && (
+          <div className="p-3.5 space-y-3 min-h-[110px]" id={`console-view-${route}`}>
+            {!resp ? (
+              <div className="flex flex-col items-center justify-center min-h-[90px] text-center text-slate-400">
+                <span className="text-lg">⚡</span>
+                <p className="text-xs italic mt-1">No execution history. Click the "Try it out" button above to negotiate with mock server.</p>
+              </div>
+            ) : (
+              <div className="space-y-3 animate-in fade-in duration-100">
+                {/* Header Metadata */}
+                <div className="flex flex-wrap items-center justify-between gap-2.5 text-xs font-mono">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400 font-semibold">Response Status:</span>
+                    <span
+                      id={`lbl-status-${route}`}
+                      className={`px-2 py-0.5 rounded font-bold border ${
+                        resp.status >= 200 && resp.status < 300
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : resp.status >= 400 && resp.status < 500
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-rose-50 text-rose-700 border-rose-200'
+                      }`}
+                    >
+                      {resp.status} {resp.statusText}
+                    </span>
+                  </div>
+                  <span className="text-slate-400" id={`lbl-time-${route}`}>
+                    Latency: <strong className="text-slate-700 font-bold">{resp.durationMs} ms</strong>
+                  </span>
+                </div>
+
+                {/* Response Headers */}
+                <details className="group border border-slate-200/60 rounded-lg overflow-hidden bg-white">
+                  <summary className="bg-slate-50 px-3 py-1.5 text-[10px] font-mono text-slate-500 font-bold cursor-pointer select-none hover:text-slate-700 flex justify-between items-center">
+                    <span>Response Headers (JSON metadata)</span>
+                    <span className="text-slate-400 font-normal group-open:hidden">▶ Show</span>
+                    <span className="text-slate-400 font-normal hidden group-open:inline">▼ Hide</span>
+                  </summary>
+                  <div className="p-2.5 border-t border-slate-100 bg-slate-50/50 text-[10px] font-mono text-slate-600 space-y-0.5 leading-snug">
+                    {Object.entries(resp.headers).map(([k, v]) => (
+                      <div key={k} className="flex justify-between">
+                        <span className="text-slate-400 font-semibold">{k}:</span>
+                        <span>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+
+                {/* Response Body Raw JSON */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono text-slate-400 font-semibold uppercase tracking-wider block">Response Body (JSON Payload):</span>
+                  <pre
+                    id={`json-response-${route}`}
+                    className="p-3 bg-slate-900 border border-slate-800 text-emerald-400 font-mono text-[10px] leading-relaxed rounded-lg overflow-x-auto max-h-[180px] shadow-inner"
+                  >
+                    {JSON.stringify(resp.body, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 2: Automation Test Code */}
+        {activeTab === 'code' && (
+          <div className="p-3.5 space-y-3" id={`code-view-${route}`}>
+            <p className="text-[11px] text-slate-500 leading-normal">
+              Freshers can paste this script directly into their test suites to automate assertions. Click buttons to switch framework syntaxes.
+            </p>
+
+            {/* Sub-Header framework selector */}
+            <div className="flex items-center justify-between border-b border-slate-150 pb-2">
+              <div className="flex gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                {(['playwright', 'cypress', 'fetch'] as const).map((lang) => (
+                  <button
+                    key={lang}
+                    id={`btn-select-lang-${route}-${lang}`}
+                    onClick={() => setSwagCodeLang(prev => ({ ...prev, [route]: lang }))}
+                    className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded-md transition-colors cursor-pointer capitalize ${
+                      activeLang === lang
+                        ? 'bg-slate-900 text-white shadow'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {lang === 'playwright' ? 'Playwright API' : lang === 'cypress' ? 'Cypress cy.request' : 'Native Fetch'}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                id={`btn-copy-${route}`}
+                onClick={() => handleCopyCode(route, currentCode)}
+                className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 hover:text-slate-800 text-[10px] font-mono font-bold rounded shadow-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+              >
+                {copiedRoute === route ? (
+                  <span className="text-emerald-600 flex items-center gap-1 font-sans">
+                    <Check className="w-3.5 h-3.5" /> Copied!
+                  </span>
+                ) : (
+                  <span>Copy Code</span>
+                )}
+              </button>
+            </div>
+
+            {/* Code Highlight Box */}
+            <pre
+              id={`code-highlight-${route}`}
+              className="p-3 bg-slate-950 border border-slate-800 text-indigo-200 font-mono text-[10px] leading-relaxed rounded-lg overflow-x-auto shadow-inner max-h-[220px]"
+            >
+              {currentCode}
+            </pre>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -1607,6 +2108,824 @@ export default function AutomationSandbox({ onAddLog }: AutomationSandboxProps) 
               💡 Playwright: `expect(locator('#license-input-verify')).toBeDisabled()`
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* SENIOR QA TRAINING LABS */}
+      <div id="senior-qa-training-card" className="bg-white p-6 rounded-xl border border-slate-200 custom-shadow mt-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-3 mb-6">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 font-bold text-xs border border-indigo-100">🎓</span>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">Senior QA Training - Core Automation Lessons</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">Critical interactive challenges designed to teach dynamic wait states, custom selectors, mouse actions, and mock APIs.</p>
+            </div>
+          </div>
+          <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded font-mono font-semibold uppercase tracking-wider border border-indigo-100 mt-2 md:mt-0">
+            LEVEL: ADVANCED FRESHER
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          {/* LESSON A: ASYNCHRONOUS WAIT STATE CHALLENGE (DYNAMIC LOADER) */}
+          <div id="async-wait-state-card" className="p-5 bg-slate-50/50 border border-slate-100 rounded-xl space-y-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 block">Lesson 1: Handling Dynamic Loaders (Wait States)</span>
+                <span className="text-[9px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">#btn-fetch-qa-data</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Real apps call APIs and render loading spinners. Automated tests must poll or wait dynamically instead of using brittle hardcoded wait timers.
+              </p>
+
+              <div className="mt-4 p-4 bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center min-h-[140px] text-center shadow-inner relative">
+                {qaFetchState === 'idle' && (
+                  <div className="space-y-3" id="async-idle-view">
+                    <p className="text-xs text-slate-500 italic">No active query. Click below to begin fetching.</p>
+                    <button
+                      id="btn-fetch-qa-data"
+                      onClick={() => {
+                        setQaFetchState('loading');
+                        setQaFetchData([]);
+                        onAddLog('QA_FETCH_START', 'btn-fetch-qa-data', 'Initiated asynchronous database fetch pipeline simulation.');
+                        setTimeout(() => {
+                          setQaFetchState('success');
+                          const data = ['Config: STAGING_SERVER_IP=172.24.52.1', 'Port: INGRESS_PORT=3000', 'Status: ACTIVE_HANDSHAKE=OK'];
+                          setQaFetchData(data);
+                          onAddLog('QA_FETCH_SUCCESS', 'btn-fetch-qa-data', 'Asynchronous pipeline fetch successfully completed after 2.0s.');
+                        }, 2000);
+                      }}
+                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg transition-all active:scale-95 cursor-pointer shadow-sm"
+                    >
+                      Fetch Mock QA Pipeline Data
+                    </button>
+                  </div>
+                )}
+
+                {qaFetchState === 'loading' && (
+                  <div className="space-y-3 flex flex-col items-center justify-center animate-pulse" id="qa-loading-container">
+                    <div id="qa-loading-spinner" className="h-6 w-6 rounded-full border-2 border-indigo-100 border-t-indigo-600 animate-spin"></div>
+                    <span id="qa-fetch-status" className="text-xs font-mono text-indigo-600 font-bold">Loading assets from server stream...</span>
+                  </div>
+                )}
+
+                {qaFetchState === 'success' && (
+                  <div className="w-full space-y-3" id="qa-success-container">
+                    <span className="text-[10px] font-mono text-emerald-600 font-bold uppercase tracking-wider block bg-emerald-50 border border-emerald-100 py-1 px-2.5 rounded-md inline-block">
+                      ✓ Fetch Completed Successfully
+                    </span>
+                    <div id="fetched-users-list" className="space-y-1 bg-slate-50 p-2 border border-slate-200 rounded-lg text-left font-mono text-[10px] text-slate-600">
+                      {qaFetchData.map((item, idx) => {
+                        const [label, val] = item.split(': ');
+                        const idPart = label.toLowerCase().replace(/[^a-z0-9]/g, '-');
+                        return (
+                          <div key={idx} className="flex justify-between py-0.5 border-b border-slate-100/60 last:border-0">
+                            <span className="text-slate-400 font-semibold">{label}:</span>
+                            <span className="text-slate-800 font-bold" id={`env-val-${idPart}`}>{val}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button
+                      id="btn-fetch-reset"
+                      onClick={() => {
+                        setQaFetchState('idle');
+                        setQaFetchData([]);
+                      }}
+                      className="text-[10px] font-mono text-indigo-500 hover:text-indigo-700 underline cursor-pointer"
+                    >
+                      Reset State
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="pt-3 border-t border-slate-100 text-[10px] text-slate-400 font-mono flex items-center justify-between">
+              <span>💡 Wait Assertion Practice</span>
+              <span>`page.waitForSelector(\'#fetched-users-list\')`</span>
+            </div>
+          </div>
+
+          {/* LESSON B: DYNAMIC API HTTP RESPONSE STATUS CODES */}
+          <div id="api-status-codes-card" className="p-5 bg-slate-50/50 border border-slate-100 rounded-xl space-y-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 block">Lesson 2: Asserting HTTP Status Codes & Elements</span>
+                <span className="text-[9px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">#api-response-selector</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Pick a mock HTTP status code and invoke the endpoint. Automated tests must confirm both visually styled boxes, text values, and response states.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-4">
+                <div className="sm:col-span-1">
+                  <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-1" htmlFor="api-response-selector">Select Code</label>
+                  <select
+                    id="api-response-selector"
+                    value={apiResponseCode}
+                    onChange={(e) => setApiResponseCode(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700 shadow-sm"
+                  >
+                    <option value="200">200 OK</option>
+                    <option value="400">400 Bad Request</option>
+                    <option value="401">401 Unauthorized</option>
+                    <option value="409">409 Conflict</option>
+                    <option value="500">500 Server Error</option>
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2 flex items-end">
+                  <button
+                    id="btn-invoke-endpoint"
+                    onClick={() => {
+                      setApiResponseLoading(true);
+                      setApiResponseResult(null);
+                      onAddLog('API_INVOKE', 'btn-invoke-endpoint', `Sent mock HTTP request to simulated status endpoint: ${apiResponseCode}`);
+                      setTimeout(() => {
+                        let res: any = { status: 200, message: 'Request was processed successfully.', data: { activeNodes: 4 } };
+                        if (apiResponseCode === '400') {
+                          res = { status: 400, message: 'Bad Request: Invalid license parameter format.', data: { errorCode: 'PARAM_MALFORMED' } };
+                        } else if (apiResponseCode === '401') {
+                          res = { status: 401, message: 'Unauthorized: Authentication session has expired.', data: { errorCode: 'SESSION_EXPIRED' } };
+                        } else if (apiResponseCode === '409') {
+                          res = { status: 409, message: 'Conflict: Sub-component port already allocated.', data: { errorCode: 'PORT_COLLISION' } };
+                        } else if (apiResponseCode === '500') {
+                          res = { status: 500, message: 'Internal Server Error: Database pool exhausted.', data: { errorCode: 'POOL_FAILED' } };
+                        }
+                        setApiResponseResult(res);
+                        setApiResponseLoading(false);
+                        onAddLog('API_RESPONSE', 'btn-invoke-endpoint', `Simulated API returned status code: ${res.status}`);
+                      }, 600);
+                    }}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-1.5 px-3 rounded-lg shadow-sm hover:scale-[1.01] transition-all cursor-pointer"
+                  >
+                    Invoke Simulated Endpoint
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 min-h-[90px] flex items-center justify-center bg-white border border-slate-200 rounded-xl p-3 shadow-inner">
+                {apiResponseLoading ? (
+                  <div className="flex items-center gap-2 text-slate-400 text-xs">
+                    <div className="h-3.5 w-3.5 rounded-full border-2 border-slate-300 border-t-indigo-600 animate-spin"></div>
+                    <span className="font-mono">Negotiating server response...</span>
+                  </div>
+                ) : apiResponseResult ? (
+                  <div
+                    id="api-response-block"
+                    className={`w-full p-2.5 rounded-lg border text-[11px] font-mono leading-tight space-y-1 ${
+                      apiResponseResult.status === 200 ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                      apiResponseResult.status === 400 || apiResponseResult.status === 401 ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                      apiResponseResult.status === 409 ? 'bg-orange-50 text-orange-800 border-orange-200' :
+                      'bg-rose-50 text-rose-800 border-rose-200'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center font-bold">
+                      <span>HTTP Status Code:</span>
+                      <span id="api-status-code-lbl" className="px-1.5 py-0.2 rounded bg-white border border-current">{apiResponseResult.status}</span>
+                    </div>
+                    <p id="api-message-lbl"><span className="text-slate-400 font-semibold">Msg:</span> {apiResponseResult.message}</p>
+                    <p className="text-[10px] text-slate-400 mt-1"><span className="font-bold">JSON Payload:</span> {JSON.stringify(apiResponseResult.data)}</p>
+                  </div>
+                ) : (
+                  <span className="text-slate-400 italic text-[11px]">Choose status and click Invoke to capture the feedback.</span>
+                )}
+              </div>
+            </div>
+            <div className="pt-3 border-t border-slate-100 text-[10px] text-slate-400 font-mono flex items-center justify-between">
+              <span>💡 Styled Box Validations</span>
+              <span>`expect(locator(\'#api-response-block\')).toHaveClass(/bg-emerald/)`</span>
+            </div>
+          </div>
+
+          {/* LESSON C: CUSTOM MULTI-SELECT TAG BUILDER */}
+          <div id="multi-select-tag-card" className="p-5 bg-slate-50/50 border border-slate-100 rounded-xl space-y-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 block">Lesson 3: Custom Dropdowns & Tag Elements (Multi-Select)</span>
+                <span className="text-[9px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">#active-tags-list</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Automating tag pickers is tough because they do not use select options. Practice adding and removing tags, asserting element count, and detecting index patterns.
+              </p>
+
+              {/* Tag Selection Row */}
+              <div className="mt-4" id="tool-tag-selection-hub">
+                <span className="block text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Click to Add Tool Tag:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {['Playwright', 'Cypress', 'Selenium', 'Appium', 'Docker', 'Jenkins'].map((tool) => {
+                    const toolSlug = tool.toLowerCase();
+                    const isSelected = qaSelectedTools.includes(tool);
+                    return (
+                      <button
+                        key={tool}
+                        id={`add-tag-${toolSlug}`}
+                        disabled={isSelected}
+                        onClick={() => {
+                          setQaSelectedTools([...qaSelectedTools, tool]);
+                          onAddLog('TAG_ADD', `add-tag-${toolSlug}`, `Custom multi-select appended tag: "${tool}"`);
+                        }}
+                        className={`text-[10px] font-semibold font-mono py-1 px-2 rounded-lg transition-all border ${
+                          isSelected
+                            ? 'bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed'
+                            : 'bg-white hover:bg-indigo-50 text-indigo-700 hover:text-indigo-800 border-slate-200 hover:border-indigo-200 cursor-pointer shadow-sm active:scale-95'
+                        }`}
+                      >
+                        + {tool}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Active Selected Tags display */}
+              <div className="mt-3 bg-white border border-slate-200 rounded-xl p-3 min-h-[64px] flex flex-col justify-center">
+                <span className="text-[9px] font-mono text-slate-400 font-bold uppercase tracking-wider mb-1 block">Active Selected Tags:</span>
+                
+                {qaSelectedTools.length === 0 ? (
+                  <p id="no-tags-warn" className="text-slate-400 italic text-[10px] py-1 text-center">No tags selected. Click elements above to populate list.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5" id="active-tags-list">
+                    {qaSelectedTools.map((tool) => {
+                      const toolSlug = tool.toLowerCase();
+                      return (
+                        <div
+                          key={tool}
+                          id={`active-tag-pill-${toolSlug}`}
+                          className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 text-indigo-800 font-mono text-[10px] font-bold py-0.5 pl-2.5 pr-1 rounded-full shadow-sm animate-in zoom-in-90 duration-150"
+                        >
+                          <span>{tool}</span>
+                          <button
+                            id={`remove-tag-${toolSlug}`}
+                            onClick={() => {
+                              setQaSelectedTools(qaSelectedTools.filter(t => t !== tool));
+                              onAddLog('TAG_REMOVE', `remove-tag-${toolSlug}`, `Custom multi-select discarded tag: "${tool}"`);
+                            }}
+                            title={`Discard ${tool} tag`}
+                            className="h-4 w-4 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-full border border-slate-150 flex items-center justify-center cursor-pointer transition-colors"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="pt-3 border-t border-slate-100 text-[10px] text-slate-400 font-mono flex items-center justify-between">
+              <span>💡 Count and List Testing</span>
+              <span>{"`await expect(page.locator('#active-tags-list > div')).toHaveCount(1)`"}</span>
+            </div>
+          </div>
+
+          {/* LESSON D: MOUSE ACTION HOVER CARD TO REVEAL DYNAMIC DATA */}
+          <div id="hover-action-card" className="p-5 bg-slate-50/50 border border-slate-100 rounded-xl space-y-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 block">Lesson 4: Mouse Move & Hover Actions (Target Reveal)</span>
+                <span className="text-[9px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">#hover-reveal-hotspot</span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Automated locators sometimes need to hover over complex cards to trigger dynamic displays. Practice hovering over the active trigger point to expose and assert hidden DOM elements.
+              </p>
+
+              <div className="mt-4 flex flex-col items-center justify-center p-3">
+                <div
+                  id="hover-reveal-hotspot"
+                  onMouseEnter={() => {
+                    setIsQaHovered(true);
+                    onAddLog('MOUSE_HOVER', 'hover-reveal-hotspot', 'Mouse successfully hovered over training hotspot.');
+                  }}
+                  onMouseLeave={() => {
+                    setIsQaHovered(false);
+                    onAddLog('MOUSE_LEAVE', 'hover-reveal-hotspot', 'Mouse departed from training hotspot.');
+                  }}
+                  className={`w-full max-w-xs border-2 border-dashed py-4 px-5 text-center rounded-xl cursor-help select-none transition-all duration-300 ${
+                    isQaHovered
+                      ? 'bg-indigo-950 border-indigo-700 text-slate-100 shadow-lg scale-[1.02]'
+                      : 'bg-white border-slate-300 hover:border-slate-400 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex flex-col items-center justify-center space-y-1.5">
+                    <span className="text-base">🎯</span>
+                    <span className="text-xs font-semibold block" id="hover-instructions-text">
+                      {isQaHovered ? 'Active Pointer Detected' : 'Hover Cursor Inside Box'}
+                    </span>
+                    <p className="text-[10px] text-slate-400 leading-normal">
+                      Exposes dynamic secret security token for validation routines
+                    </p>
+                  </div>
+                </div>
+
+                <div className="w-full mt-3 min-h-[50px] flex items-center justify-center bg-white border border-slate-100 rounded-xl p-2 text-center">
+                  {isQaHovered ? (
+                    <div className="text-center font-mono animate-in slide-in-from-bottom-2 duration-150" id="revealed-hover-data">
+                      <span className="text-[9px] font-mono text-emerald-500 font-bold block uppercase tracking-wide">✓ Verified Token Exponent:</span>
+                      <strong className="text-xs bg-emerald-50 border border-emerald-100 text-emerald-800 px-3 py-1 rounded-md mt-0.5 inline-block">
+                        TOKEN-QA-FRESHER-PASS-2026
+                      </strong>
+                    </div>
+                  ) : (
+                    <span className="text-slate-400 italic text-[10px]" id="hover-revealed-placeholder">Revealed data is currently hidden from active DOM.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="pt-3 border-t border-slate-100 text-[10px] text-slate-400 font-mono flex items-center justify-between">
+              <span>💡 Pointer Actions</span>
+              <span>`await page.locator(\'#hover-reveal-hotspot\').hover()`</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* SWAGGER OPENAPI PETSTORE SIMULATOR & API TESTING LAB */}
+      <div id="swagger-petstore-practice-card" className="bg-white p-6 rounded-xl border border-slate-200 custom-shadow mt-6">
+        {/* Card Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 pb-3 mb-6">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 font-bold text-xs border border-emerald-100">⚙️</span>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">Swagger OpenAPI Petstore Simulator (API Practice Arena)</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">Learn real API Automation and assertions. Understand endpoints, payloads, HTTP status codes, and test generation.</p>
+            </div>
+          </div>
+          <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded font-mono font-semibold uppercase tracking-wider border border-emerald-100 mt-2 md:mt-0">
+            SYSTEM: REST FULL-STACK MOCK
+          </span>
+        </div>
+
+        {/* Dynamic Mock Server Database State Viewer */}
+        <div id="swagger-mock-db-panel" className="bg-slate-50 border border-slate-200 p-4 rounded-xl mb-6 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Database className="w-4 h-4 text-emerald-600" />
+              <span className="font-bold text-xs text-slate-700">Simulated Server Database Storage (`STORED_PET_RECORDS`)</span>
+            </div>
+            <span className="text-[10px] font-mono bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-bold" id="swagger-db-count-badge">
+              {swaggerPets.length} Records
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500 leading-normal">
+            This represents the server-side state. Triggering <strong>POST</strong>, <strong>PUT</strong>, or <strong>DELETE</strong> endpoints below will modify these in-memory records in real time!
+          </p>
+          <div className="flex flex-wrap gap-2 pt-1" id="swagger-db-pills-container">
+            {swaggerPets.length === 0 ? (
+              <span className="text-xs italic text-rose-500 font-semibold" id="lbl-empty-swagger-db">⚠️ Database is empty! Use the POST endpoint below to add new pets.</span>
+            ) : (
+              swaggerPets.map((p) => (
+                <div
+                  key={p.id}
+                  id={`swag-pet-pill-${p.id}`}
+                  className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-mono shadow-sm hover:border-slate-300 transition-colors animate-in zoom-in-95 duration-150"
+                >
+                  <span className="text-[10px] font-bold text-slate-400">ID: {p.id}</span>
+                  <span className="text-slate-800 font-semibold">{p.name}</span>
+                  <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded font-normal capitalize">{p.category}</span>
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      p.status === 'available' ? 'bg-emerald-500' :
+                      p.status === 'pending' ? 'bg-amber-500' : 'bg-rose-500'
+                    }`}
+                    title={`Status: ${p.status}`}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Fresher QA Guidance Notes */}
+        <div id="swagger-fresher-tips" className="bg-indigo-50/50 border border-indigo-100 p-4 rounded-xl mb-6 space-y-1.5 text-indigo-950">
+          <h4 className="text-xs font-bold flex items-center gap-1.5 text-indigo-900">
+            <BookOpen className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            Junior QA / SDET Fresher Key Learnings:
+          </h4>
+          <ul className="list-disc pl-4 text-[11px] space-y-1 text-slate-600 leading-relaxed">
+            <li><strong>UI vs API Automation:</strong> UI automation clicks buttons and drives the browser, while API automation validates the backend data layer directly, running 10x faster and with 100% stability.</li>
+            <li><strong>JSON Payloads:</strong> Modern APIs pass data in JSON format. Always validate property existence, array bounds, and value formats in your test scripts.</li>
+            <li><strong>HTTP Status Codes:</strong> Assert that successful operations return <code>200 OK</code> or <code>201 Created</code>, while validation failures return <code>400 Bad Request</code> and missing entries return <code>404 Not Found</code>.</li>
+          </ul>
+        </div>
+
+        {/* Swagger UI Endpoints Accordion List */}
+        <div className="space-y-3" id="swagger-endpoints-list">
+
+          {/* 1. GET /api/v1/pets (LIST ALL PETS) */}
+          <div id="swag-endpoint-get-all" className="border border-blue-200 rounded-lg overflow-hidden shadow-sm">
+            {/* Collapsible Trigger Head */}
+            <button
+              id="swag-btn-toggle-get-pets"
+              onClick={() => setSwaggerExpanded(prev => ({ ...prev, getPets: !prev.getPets }))}
+              className={`w-full flex items-center justify-between p-3 transition-colors text-left font-mono cursor-pointer ${
+                swaggerExpanded.getPets ? 'bg-blue-100/70' : 'bg-blue-50/70 hover:bg-blue-100/40'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold bg-blue-600 text-white px-2.5 py-1 rounded uppercase tracking-wider text-center min-w-[70px]">GET</span>
+                <span className="text-xs font-bold text-slate-800">/api/v1/pets</span>
+                <span className="text-[11px] text-slate-500 hidden sm:inline">- Retrieves entire catalog records</span>
+              </div>
+              <span className="text-xs text-blue-700 font-mono font-bold">
+                {swaggerExpanded.getPets ? '▲ Collapse' : '▼ Expand'}
+              </span>
+            </button>
+
+            {/* Accordion Content */}
+            {swaggerExpanded.getPets && (
+              <div className="p-4 bg-white border-t border-blue-100 space-y-4 animate-in slide-in-from-top-1 duration-150" id="swag-body-get-pets">
+                <div className="text-[11px] text-slate-500 leading-relaxed">
+                  Fetches all active pet objects currently registered in the database. Returns an array. Great for testing list length assertions and array validation logic.
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] font-mono text-slate-400">Parameters: None</span>
+                  <button
+                    id="btn-exec-get-pets"
+                    onClick={handleExecuteGetPets}
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded shadow transition-all active:scale-95 cursor-pointer"
+                  >
+                    Try it out / Execute Request
+                  </button>
+                </div>
+
+                {/* Response Visualizer Panel */}
+                {renderSwaggerResponse('getPets', `import { test, expect } from '@playwright/test';
+
+test('GET /api/v1/pets should return all pets', async ({ request }) => {
+  const response = await request.get('/api/v1/pets');
+  expect(response.status()).toBe(200);
+  
+  const body = await response.json();
+  expect(Array.isArray(body)).toBe(true);
+  expect(body.length).toBeGreaterThan(0);
+  
+  // Validate first pet schema
+  const pet = body[0];
+  expect(pet).toHaveProperty('id');
+  expect(pet).toHaveProperty('name');
+  expect(pet).toHaveProperty('status');
+});`, `describe('Petstore API', () => {
+  it('should retrieve all pets', () => {
+    cy.request('GET', '/api/v1/pets').then((response) => {
+      expect(response.status).to.eq(200);
+      expect(response.body).to.be.an('array');
+      expect(response.body.length).to.be.gt(0);
+    });
+  });
+});`, `fetch('/api/v1/pets')
+  .then(res => res.json())
+  .then(data => console.log('All Pets:', data));`)}
+              </div>
+            )}
+          </div>
+
+          {/* 2. GET /api/v1/pets/{petId} (GET BY ID) */}
+          <div id="swag-endpoint-get-one" className="border border-blue-200 rounded-lg overflow-hidden shadow-sm">
+            {/* Collapsible Trigger Head */}
+            <button
+              id="swag-btn-toggle-get-by-id"
+              onClick={() => setSwaggerExpanded(prev => ({ ...prev, getPetById: !prev.getPetById }))}
+              className={`w-full flex items-center justify-between p-3 transition-colors text-left font-mono cursor-pointer ${
+                swaggerExpanded.getPetById ? 'bg-blue-100/70' : 'bg-blue-50/70 hover:bg-blue-100/40'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold bg-blue-600 text-white px-2.5 py-1 rounded uppercase tracking-wider text-center min-w-[70px]">GET</span>
+                <span className="text-xs font-bold text-slate-800">/api/v1/pets/{'{petId}'}</span>
+                <span className="text-[11px] text-slate-500 hidden sm:inline">- Retrieves individual record by parameter ID</span>
+              </div>
+              <span className="text-xs text-blue-700 font-mono font-bold">
+                {swaggerExpanded.getPetById ? '▲ Collapse' : '▼ Expand'}
+              </span>
+            </button>
+
+            {/* Accordion Content */}
+            {swaggerExpanded.getPetById && (
+              <div className="p-4 bg-white border-t border-blue-100 space-y-4 animate-in slide-in-from-top-1 duration-150" id="swag-body-get-by-id">
+                <div className="text-[11px] text-slate-500 leading-relaxed">
+                  Pass a pet ID to look up records. Try entering an existing ID like <code>101</code> or <code>102</code> to test success scenarios (returns <code>200 OK</code>), or enter an invalid ID to test error handling assertions (returns <code>404 Not Found</code>).
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wide mb-1" htmlFor="input-swag-pet-id-get">
+                      Path Parameter: petId (integer)
+                    </label>
+                    <input
+                      id="input-swag-pet-id-get"
+                      type="text"
+                      value={swagPetIdGet}
+                      onChange={(e) => setSwagPetIdGet(e.target.value)}
+                      placeholder="e.g. 101"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono shadow-sm"
+                    />
+                  </div>
+                  <div className="flex items-end justify-end">
+                    <button
+                      id="btn-exec-get-pet-by-id"
+                      onClick={handleExecuteGetPetById}
+                      className="w-full sm:w-auto px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded shadow transition-all active:scale-95 cursor-pointer"
+                    >
+                      Try it out / Execute Request
+                    </button>
+                  </div>
+                </div>
+
+                {/* Response Visualizer Panel */}
+                {renderSwaggerResponse('getPetById', `import { test, expect } from '@playwright/test';
+
+test('GET /api/v1/pets/${swagPetIdGet} should return correct pet data', async ({ request }) => {
+  const response = await request.get('/api/v1/pets/${swagPetIdGet}');
+  
+  if (response.status() === 200) {
+    const body = await response.json();
+    expect(body.id).toBe(${parseInt(swagPetIdGet, 10) || 101});
+    expect(body).toHaveProperty('name');
+  } else {
+    expect(response.status()).toBe(404);
+  }
+});`, `it('should request pet with ID ${swagPetIdGet}', () => {
+  cy.request({
+    method: 'GET',
+    url: '/api/v1/pets/${swagPetIdGet}',
+    failOnStatusCode: false
+  }).then((response) => {
+    if (response.status === 200) {
+      expect(response.body.id).to.eq(${parseInt(swagPetIdGet, 10) || 101});
+    } else {
+      expect(response.status).to.eq(404);
+    }
+  });
+});`, `fetch('/api/v1/pets/${swagPetIdGet}')
+  .then(res => res.json())
+  .then(data => console.log('Pet Output:', data));`)}
+              </div>
+            )}
+          </div>
+
+          {/* 3. POST /api/v1/pets (CREATE A PET) */}
+          <div id="swag-endpoint-post-pet" className="border border-emerald-200 rounded-lg overflow-hidden shadow-sm">
+            {/* Collapsible Trigger Head */}
+            <button
+              id="swag-btn-toggle-add-pet"
+              onClick={() => setSwaggerExpanded(prev => ({ ...prev, addPet: !prev.addPet }))}
+              className={`w-full flex items-center justify-between p-3 transition-colors text-left font-mono cursor-pointer ${
+                swaggerExpanded.addPet ? 'bg-emerald-100/70' : 'bg-emerald-50/70 hover:bg-emerald-100/40'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold bg-emerald-600 text-white px-2.5 py-1 rounded uppercase tracking-wider text-center min-w-[70px]">POST</span>
+                <span className="text-xs font-bold text-slate-800">/api/v1/pets</span>
+                <span className="text-[11px] text-slate-500 hidden sm:inline">- Adds a new record to store database</span>
+              </div>
+              <span className="text-xs text-emerald-700 font-mono font-bold">
+                {swaggerExpanded.addPet ? '▲ Collapse' : '▼ Expand'}
+              </span>
+            </button>
+
+            {/* Accordion Content */}
+            {swaggerExpanded.addPet && (
+              <div className="p-4 bg-white border-t border-emerald-100 space-y-4 animate-in slide-in-from-top-1 duration-150" id="swag-body-add-pet">
+                <div className="text-[11px] text-slate-500 leading-relaxed">
+                  Submit a JSON payload body to construct and append a pet into memory. Tests must verify that HTTP Status <code>201 Created</code> is returned along with the fully assigned database identity ID.
+                </div>
+
+                <div className="space-y-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wide mb-1" htmlFor="input-swag-add-body">
+                      Request JSON Payload Body:
+                    </label>
+                    <textarea
+                      id="input-swag-add-body"
+                      rows={5}
+                      value={swagAddPetBody}
+                      onChange={(e) => setSwagAddPetBody(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono shadow-sm text-slate-700"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400 font-mono">💡 Type name inside the JSON block</span>
+                    <button
+                      id="btn-exec-add-pet"
+                      onClick={handleExecuteAddPet}
+                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded shadow transition-all active:scale-95 cursor-pointer"
+                    >
+                      Try it out / Execute Request
+                    </button>
+                  </div>
+                </div>
+
+                {/* Response Visualizer Panel */}
+                {renderSwaggerResponse('addPet', `import { test, expect } from '@playwright/test';
+
+test('POST /api/v1/pets should register a new pet record', async ({ request }) => {
+  const response = await request.post('/api/v1/pets', {
+    data: ${swagAddPetBody.trim()}
+  });
+  expect(response.status()).toBe(201);
+  
+  const body = await response.json();
+  expect(body).toHaveProperty('id');
+  expect(body.name).toBe('${getSafePetName(swagAddPetBody, 'Rocky')}');
+  expect(body.status).toBe('available');
+});`, `it('should successfully post and create a pet', () => {
+  cy.request('POST', '/api/v1/pets', ${swagAddPetBody.trim()}).then((response) => {
+    expect(response.status).to.eq(201);
+    expect(response.body).to.have.property('id');
+    expect(response.body.name).to.eq('${getSafePetName(swagAddPetBody, 'Rocky')}');
+  });
+});`, `fetch('/api/v1/pets', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(${swagAddPetBody.trim()})
+})
+.then(res => res.json())
+.then(data => console.log('POST Output:', data));`)}
+              </div>
+            )}
+          </div>
+
+          {/* 4. PUT /api/v1/pets (UPDATE A PET) */}
+          <div id="swag-endpoint-put-pet" className="border border-amber-200 rounded-lg overflow-hidden shadow-sm">
+            {/* Collapsible Trigger Head */}
+            <button
+              id="swag-btn-toggle-update-pet"
+              onClick={() => setSwaggerExpanded(prev => ({ ...prev, updatePet: !prev.updatePet }))}
+              className={`w-full flex items-center justify-between p-3 transition-colors text-left font-mono cursor-pointer ${
+                swaggerExpanded.updatePet ? 'bg-amber-100/70' : 'bg-amber-50/70 hover:bg-amber-100/40'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold bg-amber-600 text-white px-2.5 py-1 rounded uppercase tracking-wider text-center min-w-[70px]">PUT</span>
+                <span className="text-xs font-bold text-slate-800">/api/v1/pets</span>
+                <span className="text-[11px] text-slate-500 hidden sm:inline">- Modifies an existing record inside storage</span>
+              </div>
+              <span className="text-xs text-amber-700 font-mono font-bold">
+                {swaggerExpanded.updatePet ? '▲ Collapse' : '▼ Expand'}
+              </span>
+            </button>
+
+            {/* Accordion Content */}
+            {swaggerExpanded.updatePet && (
+              <div className="p-4 bg-white border-t border-amber-100 space-y-4 animate-in slide-in-from-top-1 duration-150" id="swag-body-update-pet">
+                <div className="text-[11px] text-slate-500 leading-relaxed">
+                  Updates properties of an existing pet record. Pass the target pet <code>id</code> inside the body payload object. If the ID exists in the database, returns <code>200 OK</code>, otherwise returns <code>404 Not Found</code>.
+                </div>
+
+                <div className="space-y-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wide mb-1" htmlFor="input-swag-update-body">
+                      Request JSON Payload Body:
+                    </label>
+                    <textarea
+                      id="input-swag-update-body"
+                      rows={5}
+                      value={swagUpdatePetBody}
+                      onChange={(e) => setSwagUpdatePetBody(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono shadow-sm text-slate-700"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400 font-mono">💡 Make sure target ID matches an existing record pill</span>
+                    <button
+                      id="btn-exec-update-pet"
+                      onClick={handleExecuteUpdatePet}
+                      className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded shadow transition-all active:scale-95 cursor-pointer"
+                    >
+                      Try it out / Execute Request
+                    </button>
+                  </div>
+                </div>
+
+                {/* Response Visualizer Panel */}
+                {renderSwaggerResponse('updatePet', `import { test, expect } from '@playwright/test';
+
+test('PUT /api/v1/pets should update corresponding record', async ({ request }) => {
+  const response = await request.put('/api/v1/pets', {
+    data: ${swagUpdatePetBody.trim()}
+  });
+  
+  if (response.status() === 200) {
+    const body = await response.json();
+    expect(body.id).toBe(${getSafePetId(swagUpdatePetBody, 101)});
+    expect(body.name).toBe('${getSafePetName(swagUpdatePetBody, 'Buster Max')}');
+  } else {
+    expect(response.status()).toBe(404);
+  }
+});`, `it('should successfully update pet details', () => {
+  cy.request({
+    method: 'PUT',
+    url: '/api/v1/pets',
+    body: ${swagUpdatePetBody.trim()},
+    failOnStatusCode: false
+  }).then((response) => {
+    if (response.status === 200) {
+      expect(response.body.name).to.eq('${getSafePetName(swagUpdatePetBody, 'Buster Max')}');
+    } else {
+      expect(response.status).to.eq(404);
+    }
+  });
+});`, `fetch('/api/v1/pets', {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(${swagUpdatePetBody.trim()})
+})
+.then(res => res.json())
+.then(data => console.log('PUT Output:', data));`)}
+              </div>
+            )}
+          </div>
+
+          {/* 5. DELETE /api/v1/pets/{petId} (DELETE RECORD) */}
+          <div id="swag-endpoint-delete-pet" className="border border-rose-200 rounded-lg overflow-hidden shadow-sm">
+            {/* Collapsible Trigger Head */}
+            <button
+              id="swag-btn-toggle-delete-pet"
+              onClick={() => setSwaggerExpanded(prev => ({ ...prev, deletePet: !prev.deletePet }))}
+              className={`w-full flex items-center justify-between p-3 transition-colors text-left font-mono cursor-pointer ${
+                swaggerExpanded.deletePet ? 'bg-rose-100/70' : 'bg-rose-50/70 hover:bg-rose-100/40'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold bg-rose-600 text-white px-2.5 py-1 rounded uppercase tracking-wider text-center min-w-[70px]">DELETE</span>
+                <span className="text-xs font-bold text-slate-800">/api/v1/pets/{'{petId}'}</span>
+                <span className="text-[11px] text-slate-500 hidden sm:inline">- Discards a specific record by parameter ID</span>
+              </div>
+              <span className="text-xs text-rose-700 font-mono font-bold">
+                {swaggerExpanded.deletePet ? '▲ Collapse' : '▼ Expand'}
+              </span>
+            </button>
+
+            {/* Accordion Content */}
+            {swaggerExpanded.deletePet && (
+              <div className="p-4 bg-white border-t border-rose-100 space-y-4 animate-in slide-in-from-top-1 duration-150" id="swag-body-delete-pet">
+                <div className="text-[11px] text-slate-500 leading-relaxed">
+                  Pass an ID inside the path parameter. If the pet exists, it is permanently wiped from the store memory bank. Yields a <code>200 OK</code> response with a deletion message. Excellent for verifying schema deletions.
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wide mb-1" htmlFor="input-swag-pet-id-delete">
+                      Path Parameter: petId (integer)
+                    </label>
+                    <input
+                      id="input-swag-pet-id-delete"
+                      type="text"
+                      value={swagPetIdDelete}
+                      onChange={(e) => setSwagPetIdDelete(e.target.value)}
+                      placeholder="e.g. 104"
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-rose-500 font-mono shadow-sm"
+                    />
+                  </div>
+                  <div className="flex items-end justify-end">
+                    <button
+                      id="btn-exec-delete-pet"
+                      onClick={handleExecuteDeletePet}
+                      className="w-full sm:w-auto px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded shadow transition-all active:scale-95 cursor-pointer"
+                    >
+                      Try it out / Execute Request
+                    </button>
+                  </div>
+                </div>
+
+                {/* Response Visualizer Panel */}
+                {renderSwaggerResponse('deletePet', `import { test, expect } from '@playwright/test';
+
+test('DELETE /api/v1/pets/${swagPetIdDelete} should drop record', async ({ request }) => {
+  const response = await request.delete('/api/v1/pets/${swagPetIdDelete}');
+  
+  if (response.status() === 200) {
+    const body = await response.json();
+    expect(body.message).toContain('successfully deleted');
+    expect(body.id).toBe(${parseInt(swagPetIdDelete, 10) || 104});
+  } else {
+    expect(response.status()).toBe(404);
+  }
+});`, `it('should successfully delete target pet', () => {
+  cy.request({
+    method: 'DELETE',
+    url: '/api/v1/pets/${swagPetIdDelete}',
+    failOnStatusCode: false
+  }).then((response) => {
+    if (response.status === 200) {
+      expect(response.body.message).to.contain('successfully deleted');
+    } else {
+      expect(response.status).to.eq(404);
+    }
+  });
+});`, `fetch('/api/v1/pets/${swagPetIdDelete}', {
+  method: 'DELETE'
+})
+.then(res => res.json())
+.then(data => console.log('DELETE Output:', data));`)}
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
