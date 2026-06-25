@@ -343,16 +343,21 @@ async function startServer() {
     const cartIndex = serverCart.findIndex(item => item.productId === pId);
     if (cartIndex !== -1) {
       serverCart[cartIndex].quantity += qty;
+      if (serverCart[cartIndex].quantity <= 0) {
+        serverCart = serverCart.filter(item => item.productId !== pId);
+      }
     } else {
-      const nextId = serverCart.length > 0 ? Math.max(...serverCart.map(i => i.id)) + 1 : 1;
-      serverCart.push({
-        id: nextId,
-        productId: product.id,
-        name: product.name,
-        price: product.price,
-        quantity: qty,
-        image: product.image
-      });
+      if (qty > 0) {
+        const nextId = serverCart.length > 0 ? Math.max(...serverCart.map(i => i.id)) + 1 : 1;
+        serverCart.push({
+          id: nextId,
+          productId: product.id,
+          name: product.name,
+          price: product.price,
+          quantity: qty,
+          image: product.image
+        });
+      }
     }
 
     res.json({ message: "Product successfully added to active shopping cart.", currentCart: serverCart });
